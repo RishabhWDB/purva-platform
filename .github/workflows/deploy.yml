@@ -7,6 +7,8 @@
 #   - on a push to main that changes apps/, scripts/ or platform.conf
 #   - by hand (Actions > Deploy > Run workflow): one app or all, an exact image
 #     tag (to roll back), and a dry run that only says what would change
+#
+# Until DEPLOY_MODE=live in platform.conf, every run is a dry run.
 name: Deploy
 
 on:
@@ -59,7 +61,9 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
           load_platform
-          { echo "ready=true"; echo "client=$P_CLIENT"; echo "tenant=$P_TENANT"; echo "sub=$P_SUB"; } >> "$GITHUB_OUTPUT"
+          mode="$(conf_get platform.conf DEPLOY_MODE)"
+          case "$mode" in live) live=1 ;; *) live=0; echo "::notice::DEPLOY_MODE is '${mode:-empty}' in platform.conf, not 'live': this run only reports what it would change." ;; esac
+          { echo "ready=true"; echo "client=$P_CLIENT"; echo "tenant=$P_TENANT"; echo "sub=$P_SUB"; echo "live=$live"; } >> "$GITHUB_OUTPUT"
 
       - name: Sign in to Azure (OIDC, no stored secret)
         if: steps.conf.outputs.ready == 'true'
@@ -74,7 +78,7 @@ jobs:
         env:
           APP: ${{ github.event_name == 'workflow_dispatch' && inputs.app || 'all' }}
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+          DRY_RUN: ${{ (steps.conf.outputs.live != '1' || (github.event_name == 'workflow_dispatch' && inputs.dry_run)) && '1' || '0' }}
         run: |
           az extension add --name containerapp --upgrade --yes --only-show-errors
           bash scripts/deploy.sh "$APP" "$TAG"
