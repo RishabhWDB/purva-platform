@@ -1,0 +1,80 @@
+# The only thing that changes the container apps. Every app's settings are in
+# apps/<app>.conf; the teams' repos can only upload images to the registry.
+#
+# Runs:
+#   - every 5 minutes (GitHub often runs it later): deploys any new image a team
+#     uploaded, and fixes any app whose size doesn't match its conf
+#   - on a push to main that changes apps/, scripts/ or platform.conf
+#   - by hand (Actions > Deploy > Run workflow): one app or all, an exact image
+#     tag (to roll back), and a dry run that only says what would change
+name: Deploy
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "scripts/**"
+      - "platform.conf"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App name (as in apps/), or all"
+        default: all
+      tag:
+        description: "Exact image tag to deploy (one app only). Empty = newest new image"
+        default: ""
+      dry_run:
+        description: "Only say what would change"
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read platform.conf
+        id: conf
+        run: |
+          set -euo pipefail
+          . scripts/lib.sh
+          client="$(conf_get platform.conf DEPLOYER_CLIENT_ID)"
+          if [ -z "$client" ]; then
+            echo "::notice::DEPLOYER_CLIENT_ID is empty in platform.conf (run scripts/azure-setup.sh setup first). Skipping."
+            echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          load_platform
+          { echo "ready=true"; echo "client=$P_CLIENT"; echo "tenant=$P_TENANT"; echo "sub=$P_SUB"; } >> "$GITHUB_OUTPUT"
+
+      - name: Sign in to Azure (OIDC, no stored secret)
+        if: steps.conf.outputs.ready == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ steps.conf.outputs.client }}
+          tenant-id: ${{ steps.conf.outputs.tenant }}
+          subscription-id: ${{ steps.conf.outputs.sub }}
+
+      - name: Deploy
+        if: steps.conf.outputs.ready == 'true'
+        env:
+          APP: ${{ github.event_name == 'workflow_dispatch' && inputs.app || 'all' }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+        run: |
+          az extension add --name containerapp --upgrade --yes --only-show-errors
+          bash scripts/deploy.sh "$APP" "$TAG"
