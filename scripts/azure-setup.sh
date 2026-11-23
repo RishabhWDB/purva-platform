@@ -117,9 +117,9 @@ fi
 if [ "$ACTION" = setup ]; then
   info "== Group $P_GROUP and identity $P_IDENTITY"
   if az group show --name "$P_GROUP" -o none 2>/dev/null; then info "  group: exists"
-  else run group create --name "$P_GROUP" --location "$P_LOCATION" -o none || die "could not create group $P_GROUP"; info "  group: created"; fi
+  else run group create --name "$P_GROUP" --location "$P_LOCATION" -o none || die "could not create group $P_GROUP"; [ "$DRY_RUN" = 1 ] && info "  group: would be created" || info "  group: created"; fi
   if az identity show --resource-group "$P_GROUP" --name "$P_IDENTITY" -o none 2>/dev/null; then info "  identity: exists"
-  else run identity create --resource-group "$P_GROUP" --name "$P_IDENTITY" --location "$P_LOCATION" -o none || die "could not create identity"; info "  identity: created"; fi
+  else run identity create --resource-group "$P_GROUP" --name "$P_IDENTITY" --location "$P_LOCATION" -o none || die "could not create identity"; [ "$DRY_RUN" = 1 ] && info "  identity: would be created" || info "  identity: created"; fi
   P_PRINCIPAL="$(principal_of "$P_GROUP" "$P_IDENTITY")"
   CLIENT="$(az identity show --resource-group "$P_GROUP" --name "$P_IDENTITY" --query clientId -o tsv 2>/dev/null || true)"
   if [ -z "$P_PRINCIPAL" ]; then
