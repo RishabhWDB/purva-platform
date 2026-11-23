@@ -45,7 +45,7 @@ for a in $APPS; do load_app "$a" || die "fix apps/$a.conf first"; done
 # assignments PRINCIPAL -> JSON lines {role, scope, id}
 assignments() {
   az role assignment list --assignee-object-id "$1" --all -o json 2>/dev/null \
-    | jq -c '.[] | {role: .roleDefinitionName, scope: .scope, id: .id}'
+    | jq -c '.[] | {role: (.roleDefinitionName // "(new role, name not visible yet)"), scope: .scope, id: .id}'
 }
 
 # has_role PRINCIPAL ROLE SCOPE
