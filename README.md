@@ -25,7 +25,8 @@ this repo, every 5 min ──finds the new image──▶ deploys it with apps/<
 | `platform.conf` | Shared settings (subscription, registry, deployer identity). |
 | `scripts/deploy.sh` | What the workflow runs. |
 | `scripts/azure-setup.sh` | Cloud Shell, once: creates the deployer and takes deploy rights away from the teams. |
-| `.github/workflows/deploy.yml` | Runs every 5 minutes, on a push to main, or by hand. |
+| `scripts/deploy-timer.sh` | Cloud Shell, once: the Azure timer that starts the workflow every 5 minutes. |
+| `.github/workflows/deploy.yml` | Runs when the timer starts it, on a push to main, or by hand. |
 
 ## How a deploy works
 
@@ -41,8 +42,10 @@ For each app, `scripts/deploy.sh`:
    `HEALTH_PATH` to answer 200 (`spark`'s must answer `ok`).
 4. If the new revision isn't healthy, it **puts the previous image back** and the run goes red.
 
-A new image goes live **5-15 minutes** after the team's build finishes, because GitHub often
-starts scheduled runs late. Every run's summary has a table of what happened to each app.
+A new image goes live **5-10 minutes** after the team's build finishes. GitHub's own schedule
+turned out to run only about every 9 hours on this repo, so a small Azure Logic App
+(`deploy-timer`, ~₹35 a month) starts the workflow every 5 minutes instead; GitHub's schedule
+stays in `deploy.yml` as a backup. Every run's summary has a table of what happened to each app.
 
 **By hand** (Actions → Deploy → Run workflow):
 - `app`: one app, or `all`.
@@ -70,6 +73,18 @@ bash scripts/azure-setup.sh status            # teams: Repository Writer only
 
 To undo: `bash scripts/azure-setup.sh unlock` gives the teams their old rights back.
 
+4. The 5-minute timer. On GitHub, create a fine-grained token (Settings → Developer settings →
+   Fine-grained tokens): repository access **only this repo**, permission **Actions: Read and
+   write**, nothing else. Then:
+
+```bash
+bash scripts/deploy-timer.sh setup     # asks for the token (not shown while typing)
+bash scripts/deploy-timer.sh status    # a run every 5 minutes, "Succeeded"
+```
+
+   `pause`, `resume` and `remove` do what they say. When the token expires the runs show
+   "Failed": make a new token and run `setup` again.
+
 ## Changing things
 
 - **Size or copies:** edit `apps/<app>.conf` and push. If the cost limits
@@ -84,7 +99,7 @@ To undo: `bash scripts/azure-setup.sh unlock` gives the teams their old rights b
 
 ## Limits
 
-- GitHub turns off scheduled runs in a repo with no commits for 60 days. It emails you first;
-  re-enable it under Actions, or push any commit.
+- GitHub turns off its own scheduled runs in a repo with no commits for 60 days. That only
+  affects the backup schedule; the Azure timer keeps working until its token expires.
 - The teams still control what's *inside* their image, which is their code. They can't change
   how much it costs to run.
