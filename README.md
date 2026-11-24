@@ -1,6 +1,6 @@
 # purva-platform
 
-The only place that changes the 8 Azure container apps. Each team's repo builds its
+The only place that changes the 9 Azure container apps. Each team's repo builds its
 image and uploads it to its own repository in the shared registry; **this repo deploys
 it**, and holds every app's settings. Teams have no way to change an app, its size or
 anything else in Azure, even by editing their own workflow.
@@ -14,7 +14,7 @@ this repo, every 5 min ──finds the new image──▶ deploys it with apps/<
 | Who | Can do in Azure |
 |---|---|
 | Team identity `<app>-github` | Upload images to `<app>` in the registry. For `purva-main` and `rep-tell`, also read their Static Web App's upload token (website deploys). Nothing else. |
-| `purva-platform-deployer` (this repo, main branch only) | Update the 8 container apps, read the registry. |
+| `purva-platform-deployer` (this repo, main branch only) | Update the 9 container apps, read the registry. |
 | You (Owner) | Everything. |
 
 ## Files
